@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:romeo/feature_box.dart';
-import 'package:romeo/openai_services.dart';
+import 'package:romeo/groq_services.dart';
 import 'package:romeo/pallete.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -15,18 +15,28 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final speechToText = SpeechToText();
-  String lastWords = '';
-  final flutterTts = FlutterTts();
+  final SpeechToText speechToText = SpeechToText();
+  final FlutterTts flutterTts = FlutterTts();
   final GroqServices openaiServices = GroqServices();
 
+  String lastWords = '';
   String? generatedContent;
   String? generatedImageUrl;
+
+  bool isSpeaking = false;
+
   @override
   void initState() {
-    // TODO: implement initState
     super.initState();
     initSpeechToText();
+
+    flutterTts.setCompletionHandler(() {
+      setState(() => isSpeaking = false);
+    });
+
+    flutterTts.setCancelHandler(() {
+      setState(() => isSpeaking = false);
+    });
   }
 
   Future<void> initSpeechToText() async {
@@ -51,15 +61,20 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> systemSpeak(String content) async {
-    await flutterTts.speak(content);
+    if (isSpeaking) {
+      await flutterTts.stop();
+      setState(() => isSpeaking = false);
+    } else {
+      await flutterTts.speak(content);
+      setState(() => isSpeaking = true);
+    }
   }
 
   @override
   void dispose() {
-    // TODO: implement dispose
-    super.dispose();
     speechToText.stop();
     flutterTts.stop();
+    super.dispose();
   }
 
   @override
@@ -73,7 +88,6 @@ class _HomePageState extends State<HomePage> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            //pic of virtual assistant on the top of the screen
             Stack(
               children: [
                 Center(
@@ -89,38 +103,34 @@ class _HomePageState extends State<HomePage> {
                 ),
                 Container(
                   height: 123,
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     shape: BoxShape.circle,
                     image: DecorationImage(
-                      image: AssetImage('assets/images/virtualAssistant.png'),
+                      image:
+                      AssetImage('assets/images/virtualAssistant.png'),
                     ),
                   ),
                 ),
               ],
             ),
-            //chat bubble
+
             Visibility(
               visible: generatedImageUrl == null,
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
-                ),
-                margin: const EdgeInsets.symmetric(
-                  horizontal: 40,
-                ).copyWith(top: 30),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                margin: const EdgeInsets.symmetric(horizontal: 40)
+                    .copyWith(top: 30),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(
-                    20,
-                  ).copyWith(topLeft: Radius.zero),
+                  borderRadius:
+                  BorderRadius.circular(20).copyWith(topLeft: Radius.zero),
                   border: Border.all(color: Pallete.borderColor),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 10.0),
                   child: Text(
-                    generatedContent == null
-                        ? 'Hello! What can I do for you?'
-                        : generatedContent!,
+                    generatedContent ??
+                        'Hello! What can I do for you?',
                     style: TextStyle(
                       fontFamily: 'Cera Pro',
                       color: Pallete.mainFontColor,
@@ -130,6 +140,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
             ),
+
             if (generatedImageUrl != null)
               Padding(
                 padding: const EdgeInsets.all(10),
@@ -138,8 +149,10 @@ class _HomePageState extends State<HomePage> {
                   child: Image.network(generatedImageUrl!),
                 ),
               ),
+
             Visibility(
-              visible: generatedContent == null && generatedImageUrl == null,
+              visible: generatedContent == null &&
+                  generatedImageUrl == null,
               child: Container(
                 padding: const EdgeInsets.all(10),
                 margin: const EdgeInsets.only(top: 10, left: 38),
@@ -154,28 +167,29 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
             ),
-            //features
+
             Visibility(
-              visible: generatedContent == null && generatedImageUrl == null,
+              visible: generatedContent == null &&
+                  generatedImageUrl == null,
               child: Column(
                 children: [
                   FeatureBox(
                     color: Pallete.firstSuggestionBoxColor,
-                    headerText: 'ChatGPT',
+                    headerText: 'Chat',
                     descriptionText:
-                        'A smarter way to stay organized and informed with ChatGPT.',
+                    'A smarter way to stay organized and informed.',
                   ),
                   FeatureBox(
                     color: Pallete.secondSuggestionBoxColor,
-                    headerText: 'Dall-E',
+                    headerText: 'Voice',
                     descriptionText:
-                        'Get inspired and stay creative with your personal assistant powered by Dall-E.',
+                    'Talk naturally with your AI assistant.',
                   ),
                   FeatureBox(
                     color: Pallete.thirdSuggestionBoxColor,
-                    headerText: 'Smart Voice Assistant- Romi',
+                    headerText: 'Romi',
                     descriptionText:
-                        'Get the best of both worlds with a voice assistant powered by Chat-GPT and Dall-E.',
+                    'Smart voice assistant powered by Groq.',
                   ),
                 ],
               ),
@@ -183,31 +197,38 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       ),
+
       floatingActionButton: FloatingActionButton(
         backgroundColor: Pallete.firstSuggestionBoxColor,
         onPressed: () async {
-          if (await speechToText.hasPermission && speechToText.isNotListening) {
+          if (isSpeaking) {
+            await flutterTts.stop();
+            setState(() => isSpeaking = false);
+            return;
+          }
+
+          if (await speechToText.hasPermission &&
+              speechToText.isNotListening) {
             await _startListening();
           } else if (speechToText.isListening) {
-            final speech = await openaiServices.isArtPrompt(lastWords);
-            if (speech.contains('https')) {
-              generatedImageUrl = speech;
-              generatedContent = null;
-              setState(() {});
-            } else {
-              generatedImageUrl = null;
-              generatedContent = speech;
-              setState(() {});
-              await systemSpeak(speech);
-            }
+            final speech =
+            await openaiServices.isArtPrompt(lastWords);
+
+            generatedImageUrl = null;
+            generatedContent = speech;
+            setState(() {});
+
             await systemSpeak(speech);
             await _stopListening();
-          } else {
-            initSpeechToText();
           }
         },
-        child:  Icon(
-            speechToText.isListening ? Icons.stop:  Icons.mic),
+        child: Icon(
+          isSpeaking
+              ? Icons.volume_off
+              : speechToText.isListening
+              ? Icons.stop
+              : Icons.mic,
+        ),
       ),
     );
   }
