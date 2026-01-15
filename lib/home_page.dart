@@ -22,7 +22,6 @@ class _HomePageState extends State<HomePage> {
   String lastWords = '';
   String? generatedContent;
   String? generatedImageUrl;
-
   bool isSpeaking = false;
 
   @override

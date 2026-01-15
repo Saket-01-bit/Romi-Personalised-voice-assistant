@@ -1,1 +1,0 @@
-const groqApiKey = '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';
